@@ -101,98 +101,48 @@ class AIService {
   }
 
   /**
-   * 调用 AI API (支持 DeepSeek 和 Gemini 格式)
+   * 调用 AI API
    */
   private async callAI(userPrompt: string): Promise<string> {
-    // 检测是否使用 Gemini API
-    const isGemini = this.config.baseUrl.includes('generativelanguage.googleapis.com')
+    const url = `${this.config.baseUrl}/chat/completions`
 
-    if (isGemini) {
-      // Gemini API 格式
-      const modelName = this.config.model.includes('gemini') ? this.config.model : `models/${this.config.model}`
-      const url = `${this.config.baseUrl}/${modelName}:generateContent?key=${this.config.apiKey}`
+    console.log('🌐 API URL:', url)
 
-      console.log('🌐 Gemini API URL:', url)
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: '你是一位专业健身教练。请只返回JSON格式的计划，不要返回其他文字。' },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: this.config.temperature,
+        max_tokens: 8000
+      }),
+      signal: AbortSignal.timeout(this.config.timeout)
+    })
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: `你是一位专业健身教练。请只返回JSON格式的计划，不要返回其他文字。\n\n${userPrompt}`
-            }]
-          }],
-          generationConfig: {
-            temperature: this.config.temperature,
-            maxOutputTokens: 8000
-          }
-        }),
-        signal: AbortSignal.timeout(this.config.timeout)
-      })
+    console.log('📡 HTTP 状态码:', response.status)
 
-      console.log('📡 HTTP 状态码:', response.status)
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMsg = errorData.error?.message || `API 请求失败: ${response.status}`
-        console.error('❌ API 错误:', errorMsg)
-        throw new Error(errorMsg)
-      }
-
-      const data = await response.json()
-
-      if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
-        console.error('❌ Gemini 响应结构异常:', JSON.stringify(data).substring(0, 200))
-        throw new Error('API 返回数据格式错误')
-      }
-
-      return data.candidates[0].content.parts[0].text
-
-    } else {
-      // DeepSeek/OpenAI 格式
-      const url = `${this.config.baseUrl}/chat/completions`
-
-      console.log('🌐 API URL:', url)
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.config.apiKey}`
-        },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages: [
-            { role: 'system', content: '你是一位专业健身教练。请只返回JSON格式的计划，不要返回其他文字。' },
-            { role: 'user', content: userPrompt }
-          ],
-          temperature: this.config.temperature,
-          max_tokens: 8000
-        }),
-        signal: AbortSignal.timeout(this.config.timeout)
-      })
-
-      console.log('📡 HTTP 状态码:', response.status)
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMsg = errorData.error?.message || `API 请求失败: ${response.status}`
-        console.error('❌ API 错误:', errorMsg)
-        throw new Error(errorMsg)
-      }
-
-      const data = await response.json()
-
-      if (!data.choices || !data.choices[0]?.message?.content) {
-        console.error('❌ 响应结构异常:', JSON.stringify(data).substring(0, 200))
-        throw new Error('API 返回数据格式错误')
-      }
-
-      return data.choices[0].message.content
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      const errorMsg = errorData.error?.message || `API 请求失败: ${response.status}`
+      console.error('❌ API 错误:', errorMsg)
+      throw new Error(errorMsg)
     }
+
+    const data = await response.json()
+
+    if (!data.choices || !data.choices[0]?.message?.content) {
+      console.error('❌ 响应结构异常:', JSON.stringify(data).substring(0, 200))
+      throw new Error('API 返回数据格式错误')
+    }
+
+    return data.choices[0].message.content
   }
 
   /**
